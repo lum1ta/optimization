@@ -7,7 +7,7 @@ size_pop = 100;
 generation = 30;
 crossover_rate = 0.5;
 mutation_factor = 0.4;
-limits = [-10000, 10000];
+limits = [-100, 100];
 
 %% ===================== POPULAÇÃO INICIAL =====================
 initial_population = limits(1) + (limits(2) - limits(1)) * rand(size_pop, dimensions);
@@ -19,6 +19,33 @@ end
 
 best_position = zeros(generation, dimensions);
 best_fitness_history = zeros(generation,1);
+
+% Remove espaços do nome da função (evita problema em nome de arquivo)
+name_clean = strrep(name_function, ' ', '_');
+
+% Define pasta de saída
+if isempty(mfilename)
+    pasta_saida = pwd;  % se rodar por partes
+else
+    pasta_saida = fileparts(mfilename('fullpath')); % mesma pasta do script
+end
+
+% Nome do arquivo depende da função
+arquivo_saida = fullfile(pasta_saida, ['DE_resultados_', name_clean, '.txt']);
+
+fid = fopen(arquivo_saida, 'w');
+
+fprintf('Arquivo sera salvo em:\n%s\n\n', arquivo_saida);
+
+if fid == -1
+    error('Falha ao criar arquivo.');
+end
+
+fprintf(fid, 'Differential Evolution Results\n');
+fprintf(fid, 'Function: %s\n', name_function);
+fprintf(fid, 'Dimensions: %d\n\n', dimensions);
+fprintf(fid, 'Generation\tBest Fitness\tBest Position\n');
+
 
 %% ===================== DIFFERENTIAL EVOLUTION =====================
 for gen = 1:generation
@@ -56,8 +83,13 @@ for gen = 1:generation
     best_position(gen,:) = initial_population(best_idx,:);
     best_fitness_history(gen) = best_fitness;
 
+    fprintf(fid, '%d\t%.10f\t%s\n', gen, best_fitness, mat2str(best_position(gen,:),4));
+
+
     fprintf('Generation %d | Best Fitness = %.6f\n', gen, best_fitness);
 end
+fclose(fid);
+
 
 %% ===================== RESULTADO FINAL =====================
 fprintf('\n======== FINAL RESULTS ========\n');
@@ -79,25 +111,33 @@ if dimensions == 2
     Zmin = min(best_fitness_history);
     Zmax = prctile(Z(:), 90);
     Zplot = min(Z, Zmax);
+    %Zplot = log10(Zplot - Zmin + 1); %escala logaritma
 
-    hLandscape = contourf(X, Y, Zplot, 50, 'LineColor','none');
+
+    contourf(X, Y, Zplot, 50, 'LineColor','none', 'DisplayName','Landscape');
     colormap(turbo);
     colorbar;
-    caxis([Zmin Zmax]);
+    caxis([0 log10(Zmax - Zmin + 1)]);
+    %colorbar;
+    %caxis([Zmin Zmax]);
 
-    hPath = plot(best_position(:,1), best_position(:,2), 'w-', 'LineWidth',2);
-    hBestGen = scatter(best_position(:,1), best_position(:,2), 30, 'r','filled');
-    hBestFinal = scatter(best_solution(1), best_solution(2), 150, 'g','filled','MarkerEdgeColor','k');
-    hPop = scatter(initial_population(:,1), initial_population(:,2), 20, 'k','filled','MarkerFaceAlpha',0.25);
+    plot(best_position(:,1), best_position(:,2), 'w-', 'LineWidth',2, ...
+        'DisplayName','Best Path');
+
+    scatter(best_position(:,1), best_position(:,2), 30, 'r','filled', ...
+        'DisplayName','Best per Generation');
+
+    scatter(best_solution(1), best_solution(2), 150, 'g','filled', ...
+        'MarkerEdgeColor','k','DisplayName','Final Best');
+
+    scatter(initial_population(:,1), initial_population(:,2), 20, 'k','filled', ...
+        'MarkerFaceAlpha',0.25,'DisplayName','Final Population');
 
     title(['Search Landscape - ', name_function])
     xlabel('x_1'); ylabel('x_2');
 
-    legend([hLandscape(1) hPath hBestGen hBestFinal hPop], ...
-        {'Landscape','Best Path','Best per Generation','Final Best','Final Population'}, ...
-        'Location','bestoutside');
+    legend('Location','bestoutside')
 end
-
 if dimensions == 3
     figure; hold on; grid on;
 
@@ -115,7 +155,9 @@ if dimensions == 3
     Zmax = prctile(Z(:), 90);
     Zplot = min(Z, Zmax);
 
-    hSurf = surf(X1, X2, Zplot, 'EdgeColor','none');
+    surf(X1, X2, Zplot, 'EdgeColor','none', 'DisplayName','Landscape');
+    %set(gca, 'ZScale', 'log') %escala logaritma
+
     colormap(turbo);
     colorbar;
     caxis([Zmin Zmax]);
@@ -124,23 +166,27 @@ if dimensions == 3
     for k = 1:size_pop
         fvals(k) = objetive_function(initial_population(k,:));
     end
-    hPop3 = scatter3(initial_population(:,1), initial_population(:,2), fvals,...
-        25,'k','filled','MarkerFaceAlpha',0.35);
+
+    scatter3(initial_population(:,1), initial_population(:,2), fvals,...
+        25,'k','filled','MarkerFaceAlpha',0.35,'DisplayName','Final Population');
 
     best_fvals = zeros(generation,1);
     for g = 1:generation
         best_fvals(g) = objetive_function(best_position(g,:));
     end
-    hPath3 = plot3(best_position(:,1), best_position(:,2), best_fvals,'w-','LineWidth',2);
-    hBestGen3 = scatter3(best_position(:,1), best_position(:,2), best_fvals,30,'r','filled');
-    hBestFinal3 = scatter3(best_solution(1), best_solution(2), best_fitness,...
-        200,'g','filled','MarkerEdgeColor','k');
+
+    plot3(best_position(:,1), best_position(:,2), best_fvals,'w-','LineWidth',2,...
+        'DisplayName','Best Path');
+
+    scatter3(best_position(:,1), best_position(:,2), best_fvals,30,'r','filled',...
+        'DisplayName','Best per Generation');
+
+    scatter3(best_solution(1), best_solution(2), best_fitness,...
+        200,'g','filled','MarkerEdgeColor','k','DisplayName','Final Best');
 
     title(['Function Surface (x_3 = ', num2str(x3_fixed,3), ') - ', name_function])
     xlabel('x_1'); ylabel('x_2'); zlabel('f(x)');
     view(45,30)
 
-    legend([hSurf hPath3 hBestGen3 hBestFinal3 hPop3], ...
-        {'Landscape','Best Path','Best per Generation','Final Best','Final Population'}, ...
-        'Location','bestoutside');
+    legend('Location','bestoutside')
 end
